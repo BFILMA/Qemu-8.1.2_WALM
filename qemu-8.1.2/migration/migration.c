@@ -2745,7 +2745,7 @@ static MigIterateState migration_iteration_run(MigrationState *s)
 
 	trace_migrate_pending_estimate(pending_size, must_precopy, can_postcopy);
 
-//	printf("Pending Size : %ld | Must Precopy : %ld | Can PostCopy : %ld\n", pending_size, must_precopy, can_postcopy);
+	printf("Pending Size : %ld | Must Precopy : %ld | Can PostCopy : %ld\n", pending_size, must_precopy, can_postcopy);
 
 	if (must_precopy <= s->threshold_size) {
 //		printf("Pending Precopy Size less thatn Threshold Size\n");						
