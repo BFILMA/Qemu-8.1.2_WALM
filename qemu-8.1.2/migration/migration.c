@@ -71,6 +71,7 @@ int iteration = 0;
 
 static NotifierList migration_state_notifiers =
 NOTIFIER_LIST_INITIALIZER(migration_state_notifiers);
+static uint64_t prev_pending_size; /*Ilma: To track the dirty pages*/
 
 /* Messages sent on the return path from destination to source */
 enum mig_rp_message_type {
@@ -1697,7 +1698,11 @@ void qmp_migrate(const char *uri, bool has_blk, bool blk,
 	} else if (strstart(uri, "rdma:", &p)) {
 		rdma_start_outgoing_migration(s, p, &local_err);
 #endif
-	} else if (strstart(uri, "exec:", &p)) {
+	} else if (strstart(uri, "hb:", &p)){ /* Ilma : Enables hybrid user command */
+		printf("Starting Hybrid Migration\n");
+		socket_start_outgoing_migration(s, p ? p : uri, &local_err);
+
+	}else if (strstart(uri, "exec:", &p)) {
 		exec_start_outgoing_migration(s, p, &local_err);
 	} else if (strstart(uri, "fd:", &p)) {
 		fd_start_outgoing_migration(s, p, &local_err);
@@ -2760,6 +2765,13 @@ static MigIterateState migration_iteration_run(MigrationState *s)
 		trace_migration_thread_low_pending(pending_size);
 		migration_completion(s);	
 		return MIG_ITERATE_BREAK;
+	}
+
+	/* Ilma: Check if hb is enabled. If so, track the pending pages and switch accordingly. */
+	/*Ilma: At this point, current dirty pages are greater than the last time. We need to monitor the dirty
+	pages from this point onwards for several iterations and if the behavior is the same, switch to pp.*/
+	if(pending_size > prev_pending_size){
+		printf("--------------Number of dirty pages greater than previous iteration----------------\n");
 	}
 
 	/* Still a significant amount to transfer */
