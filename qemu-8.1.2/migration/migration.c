@@ -71,7 +71,9 @@ int iteration = 0;
 
 static NotifierList migration_state_notifiers =
 NOTIFIER_LIST_INITIALIZER(migration_state_notifiers);
-static uint64_t prev_pending_size = 0; /*Ilma: To track the dirty pages*/
+static uint64_t prev_pending_size = 0; /*Ilma: To track the dirty pages */
+bool hb_enabled = false; /*Ilma: HB migration */
+bool hb_switchpoint = false; /* Ilma: HB static switch point (Iteration 2)*/
 
 /* Messages sent on the return path from destination to source */
 enum mig_rp_message_type {
@@ -1700,6 +1702,7 @@ void qmp_migrate(const char *uri, bool has_blk, bool blk,
 #endif
 	} else if (strstart(uri, "hb:", &p)){ /* Ilma : Enables hybrid user command */
 		printf("Starting Hybrid Migration\n");
+		hb_enabled = true; 
 		socket_start_outgoing_migration(s, p ? p : uri, &local_err);
 
 	}else if (strstart(uri, "exec:", &p)) {
@@ -2767,7 +2770,16 @@ static MigIterateState migration_iteration_run(MigrationState *s)
 		return MIG_ITERATE_BREAK;
 	}
 
-	/* Ilma: Check if hb is enabled. If so, track the pending pages and switch accordingly. */
+	/* Ilma: Check if hb is enabled. If so, switch to pp. */
+	if(hb_enabled && hb_switchpoint){
+		if (postcopy_start(s, &local_err)) {
+			migrate_set_error(s, local_err);
+			error_report_err(local_err);
+		}
+		migration_completion(s);	
+		return MIG_ITERATE_SKIP;
+	}
+	
 	/*Ilma: At this point, current dirty pages are greater than the last time. We need to monitor the dirty
 	pages from this point onwards for several iterations and if the behavior is the same, switch to pp.*/
 	if(pending_size > prev_pending_size){
@@ -3024,6 +3036,12 @@ static void *migration_thread(void *opaque)
 	printf("Starting Iterations ...\n");
 	while (migration_is_active(s)) {
 		iteration++;
+		/* Ilma: If HB migration is enabled, stop at 2nd iteration. */
+		if(!hb_enabled){
+			if(iteration == 3){
+				hb_switchpoint = true;
+			}
+		}
 		printf("Iteration %d \n",iteration);
 		if (urgent || !migration_rate_exceeded(s->to_dst_file)) {
 			MigIterateState iter_state = migration_iteration_run(s);
