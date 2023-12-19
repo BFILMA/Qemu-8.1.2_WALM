@@ -2748,6 +2748,16 @@ static MigIterateState migration_iteration_run(MigrationState *s)
 	bool in_postcopy = s->state == MIGRATION_STATUS_POSTCOPY_ACTIVE;
 	bool can_switchover = migration_can_switchover(s);
 
+	/* Ilma: Check if hb is enabled. If so, switch to pp. */
+	if(hb_enabled && hb_switchpoint){
+		if (postcopy_start(s, &local_err)) {
+			migrate_set_error(s, local_err);
+			error_report_err(local_err);
+		}
+		migration_completion(s);	
+		return MIG_ITERATE_SKIP;
+	}
+
 	qemu_savevm_state_pending_estimate(&must_precopy, &can_postcopy);
 	uint64_t pending_size = must_precopy + can_postcopy;
 
@@ -2768,16 +2778,6 @@ static MigIterateState migration_iteration_run(MigrationState *s)
 		trace_migration_thread_low_pending(pending_size);
 		migration_completion(s);	
 		return MIG_ITERATE_BREAK;
-	}
-
-	/* Ilma: Check if hb is enabled. If so, switch to pp. */
-	if(hb_enabled && hb_switchpoint){
-		if (postcopy_start(s, &local_err)) {
-			migrate_set_error(s, local_err);
-			error_report_err(local_err);
-		}
-		migration_completion(s);	
-		return MIG_ITERATE_SKIP;
 	}
 	
 	/*Ilma: At this point, current dirty pages are greater than the last time. We need to monitor the dirty
