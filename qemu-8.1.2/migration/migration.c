@@ -71,7 +71,7 @@ int iteration = 0;
 
 static NotifierList migration_state_notifiers =
 NOTIFIER_LIST_INITIALIZER(migration_state_notifiers);
-static uint64_t prev_pending_size; /*Ilma: To track the dirty pages*/
+static uint64_t prev_pending_size = 0; /*Ilma: To track the dirty pages*/
 
 /* Messages sent on the return path from destination to source */
 enum mig_rp_message_type {
@@ -2774,6 +2774,8 @@ static MigIterateState migration_iteration_run(MigrationState *s)
 		printf("--------------Number of dirty pages greater than previous iteration----------------\n");
 	}
 
+	prev_pending_size = pending_size;
+	
 	/* Still a significant amount to transfer */
 	if (!in_postcopy && must_precopy <= s->threshold_size && can_switchover &&
 			qatomic_read(&s->start_postcopy)) {
