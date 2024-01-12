@@ -3037,7 +3037,7 @@ static void *migration_thread(void *opaque)
 	while (migration_is_active(s)) {
 		iteration++;
 		/* Ilma: If HB migration is enabled, stop at 2nd iteration. */
-		if(!hb_enabled){
+		if(hb_enabled){
 			if(iteration == 3){
 				hb_switchpoint = true;
 			}
