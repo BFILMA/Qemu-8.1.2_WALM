@@ -3130,8 +3130,9 @@ static int ram_save_iterate(QEMUFile *f, void *opaque)
 
         t0 = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
         i = 0;
-        while ((ret = migration_rate_exceeded(f)) == 0 ||
-               postcopy_has_request(rs)) {
+       // while ((ret = migration_rate_exceeded(f)) == 0 ||
+         //      postcopy_has_request(rs)) {
+           while (1){
             int pages;
 
             if (qemu_file_get_error(f)) {
@@ -3169,10 +3170,10 @@ static int ram_save_iterate(QEMUFile *f, void *opaque)
             if ((i & 63) == 0) {
                 uint64_t t1 = (qemu_clock_get_ns(QEMU_CLOCK_REALTIME) - t0) /
                               1000000;
-                if (t1 > MAX_WAIT) {
-                    trace_ram_save_iterate_big_wait(t1, i);
-                    break;
-                }
+                // if (t1 > MAX_WAIT) {
+                //     trace_ram_save_iterate_big_wait(t1, i);
+                //     break;
+                // }
             }
             i++;
         }
