@@ -3130,6 +3130,7 @@ static int ram_save_iterate(QEMUFile *f, void *opaque)
 
         t0 = qemu_clock_get_ns(QEMU_CLOCK_REALTIME);
         i = 0;
+        int spages = 0;
        // while ((ret = migration_rate_exceeded(f)) == 0 ||
          //      postcopy_has_request(rs)) {
            while (1){
@@ -3152,7 +3153,7 @@ static int ram_save_iterate(QEMUFile *f, void *opaque)
             }
 
             rs->target_page_count += pages;
-
+            spages += pages;
             /*
              * During postcopy, it is necessary to make sure one whole host
              * page is sent in one chunk.
@@ -3177,6 +3178,7 @@ static int ram_save_iterate(QEMUFile *f, void *opaque)
             }
             i++;
         }
+        printf("# Pages transferred in current iteration: %d\n", spages);
     }
     qemu_mutex_unlock(&rs->bitmap_mutex);
 
