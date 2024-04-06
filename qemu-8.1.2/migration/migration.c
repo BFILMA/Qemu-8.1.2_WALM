@@ -1680,53 +1680,67 @@ void qmp_migrate(const char *uri, bool has_blk, bool blk,
 		bool has_inc, bool inc, bool has_detach, bool detach,
 		bool has_resume, bool resume, Error **errp)
 {
-// ---------------ILMA WALM---------------------------------------
 
-FILE *file = fopen("/var/lib/libvirt/images/SAMINDU/Live-Migration/qemu-scripts/migration/automated/resourceUsage.txt", "r"); if (file == NULL) { perror("Error opening file"); return EXIT_FAILURE; }
+	// ---------------ILMA WALM---------------------------------------
 
-char line[256];
-double avgCPU = 0.0;
-double avgMEM = 0.0;
-int tap0_tx_packets = 0;
-int tap0_rx_packets = 0;
+	FILE *file = fopen("/var/lib/libvirt/images/SAMINDU/Live-Migration/qemu-scripts/migration/automated/rm/resourceUsage.txt", "r"); if (file == NULL) { perror("Error opening file"); exit; }
 
-while (fgets(line, sizeof(line), file))
-{
-    // Assuming each line in resourceUsage.txt contains a metric followed by a value
-    // You can customize this parsing based on your specific format
+	char line[256];
+	double avgCPU = 0.0;
+	double avgMEM = 0.0;
+	int tap0_tx_packets = 0;
+	int tap0_rx_packets = 0;
+	char * migrationMethod;
 
-    // Check if the line contains "CPU Usage:"
-    if (strstr(line, "CPU Usage:") != NULL)
-    {
-        sscanf(line, "CPU Usage: %lf%%", &avgCPU);
-    }
+	while (fgets(line, sizeof(line), file))
+	{
+		// Check if the line contains "CPU Usage:"
+		if (strstr(line, "CPU Usage:") != NULL)
+		{
+			sscanf(line, "CPU Usage: %lf%%", &avgCPU);
+		}
 
-    // Check if the line contains "Memory Usage:"
-    if (strstr(line, "Memory Usage:") != NULL)
-    {
-        sscanf(line, "Memory Usage: %lf%%", &avgMEM);
-    }
+		// Check if the line contains "Memory Usage:"
+		if (strstr(line, "Memory Usage:") != NULL)
+		{
+			sscanf(line, "Memory Usage: %lf%%", &avgMEM);
+		}
 
-    // Check if the line contains "Transmitted:"
-    if (strstr(line, "Transmitted:") != NULL)
-    {
-        sscanf(line, "Transmitted: %d packets", &tap0_tx_packets);
-    }
+		// Check if the line contains "Transmitted:"
+		if (strstr(line, "Transmitted:") != NULL)
+		{
+			sscanf(line, "Transmitted: %d packets", &tap0_tx_packets);
+		}
 
-    // Check if the line contains "Received:"
-    if (strstr(line, "Received:") != NULL)
-    {
-        sscanf(line, "Received: %d packets", &tap0_rx_packets);
-    }
-}
+		// Check if the line contains "Received:"
+		if (strstr(line, "Received:") != NULL)
+		{
+			sscanf(line, "Received: %d packets", &tap0_rx_packets);
+		}
+	}
 
-printf("MIGRATION CPU Usage: %.2f%%\n", avgCPU);
-printf("MIGRATION Memory Usage: %.2f%%\n", avgMEM);
-printf("MIGRATION Transmitted: %d packets\n", tap0_tx_packets);
-printf("MIGRATION Received: %d packets\n", tap0_rx_packets);
+	printf("MIGRATION CPU Usage: %.2f%%\n", avgCPU);
+	printf("MIGRATION Memory Usage: %.2f%%\n", avgMEM);
+	printf("MIGRATION Transmitted: %d packets\n", tap0_tx_packets);
+	printf("MIGRATION Received: %d packets\n", tap0_rx_packets);
 
-fclose(file);
-// ---------------------------------------------------------------
+	fclose(file);
+
+	if (avgMEM > 10) {
+        	migrationMethod = "pp";
+    	} else {
+        	if (tap0_tx_packets > 100 || tap0_rx_packets > 100) {
+            		if (tap0_tx_packets > 100) {
+                		migrationMethod = "pp";
+            		} else {
+                		migrationMethod = "tcp";
+            		}
+        	} else {
+            		migrationMethod = "hb";
+        	}
+    	}
+	printf("Migration Method : %s\n", migrationMethod);
+//	 ---------------------------------------------------------------
 
 	bool resume_requested;
 	Error *local_err = NULL;
@@ -1750,10 +1764,9 @@ fclose(file);
 			return;
 		}
 	}
-
 	if (strstart(uri, "tcp:", &p) ||
 			strstart(uri, "unix:", NULL) ||
-			strstart(uri, "vsock:", NULL)) {
+			strstart(uri, "vsock:", NULL )) {
 		printf("Starting PreCopy Migartion\n");
 		socket_start_outgoing_migration(s, p ? p : uri, &local_err);
 	} /* Added by Samindu */ else if(strstart(uri, "pp:", &p)) { /* Enables postcopy user command */
@@ -1775,6 +1788,22 @@ fclose(file);
 		exec_start_outgoing_migration(s, p, &local_err);
 	} else if (strstart(uri, "fd:", &p)) {
 		fd_start_outgoing_migration(s, p, &local_err);
+	// WALM CHECK
+	} else if (strstart(uri, "walm:", &p)) {
+		if(migrationMethod == "tcp"){
+			printf("---------WALM enabled PC migration----------\n");
+			socket_start_outgoing_migration(s, p ? p : uri, &local_err);
+		} else if (migrationMethod == "pp"){
+			printf("---------WALM enabled PP migration----------\n");
+			printf("Starting PostCopy Migration\n");
+			Error *err = NULL;
+			qmp_migrate_start_postcopy(&err);
+			socket_start_outgoing_migration(s, p ? p : uri, &local_err);
+		} else if (migrationMethod == "hb"){
+			printf("---------WALM enabled HB migration----------\n");
+			hb_enabled = true;
+			socket_start_outgoing_migration(s, p ? p : uri, &local_err);
+		}
 	} else {
 		if (!resume_requested) {
 			yank_unregister_instance(MIGRATION_YANK_INSTANCE);
@@ -2820,14 +2849,14 @@ fail:
 
 		/* Ilma: Check if hb is enabled. If so, switch to pp. */
 		/*if(hb_enabled && hb_switchpoint){
-			if (postcopy_start(s, &local_err)) {
-				migrate_set_error(s, local_err);
-				error_report_err(local_err);
-			}
-			migration_completion(s);	
-			return MIG_ITERATE_SKIP;
-		}
-		*/
+		  if (postcopy_start(s, &local_err)) {
+		  migrate_set_error(s, local_err);
+		  error_report_err(local_err);
+		  }
+		  migration_completion(s);	
+		  return MIG_ITERATE_SKIP;
+		  }
+		  */
 		qemu_savevm_state_pending_estimate(&must_precopy, &can_postcopy);
 		uint64_t pending_size = must_precopy + can_postcopy;
 
@@ -2851,10 +2880,11 @@ fail:
 			trace_migration_thread_low_pending(pending_size);
 			migration_completion(s);
 			return MIG_ITERATE_BREAK;
+			printf("Inside IFDEF");
 		}
 #endif
 		/* Ilma: We need to monitor the dirty pages from this point onwards for several iterations and if the
-behavior is the same, switch to pp*/
+		   behavior is the same, switch to pp*/
 		if(hb_enabled){
 			int difference = pending_size - prev_pending_size;
 			int absValue = (difference >= 0) ? difference : -difference;
@@ -2888,7 +2918,6 @@ behavior is the same, switch to pp*/
 			migration_completion(s);	
 			return MIG_ITERATE_SKIP;
 		}
-
 		/* Just another iteration step */
 		qemu_savevm_state_iterate(s->to_dst_file, in_postcopy);
 		return MIG_ITERATE_RESUME;
@@ -3128,10 +3157,10 @@ behavior is the same, switch to pp*/
 			iteration++;
 			/* Ilma: If HB migration is enabled, stop at 2nd iteration. */
 			/*if(hb_enabled){
-				if(iteration == 51){
-					hb_switchpoint = true;
-				}
-			}*/
+			  if(iteration == 51){
+			  hb_switchpoint = true;
+			  }
+			  }*/
 			printf("Iteration %d \n",iteration);
 
 			if (iteration > 50) {
