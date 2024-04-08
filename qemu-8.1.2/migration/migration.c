@@ -1729,8 +1729,8 @@ void qmp_migrate(const char *uri, bool has_blk, bool blk,
 	if (avgMEM > 10) {
         	migrationMethod = "pp";
     	} else {
-        	if (tap0_tx_packets > 100 || tap0_rx_packets > 100) {
-            		if (tap0_tx_packets > 100) {
+        	if (tap0_tx_packets > 15000 || tap0_rx_packets > 15000) {
+            		if (tap0_rx_packets > tap0_tx_packets) {
                 		migrationMethod = "pp";
             		} else {
                 		migrationMethod = "tcp";
